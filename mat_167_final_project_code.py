@@ -7,14 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1KXmePGME1ePQq9fYtlnGV5lhCihLH-fL
 
 Priyanshi Singh
-
-921361569
-
-
-
 Candice Chan
-
-920841239
 
 Part (a): Load and display the first 16 digit images
 """
