@@ -1,0 +1,309 @@
+\documentclass{article}
+
+\usepackage{geometry}                
+\geometry{letterpaper,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\parskip = 0.1in
+\usepackage{amsmath, amssymb, amsfonts} % for math equations
+\usepackage{graphicx} % for figures
+\usepackage{booktabs} % for tables
+\usepackage{listings} % for code listings
+\usepackage{xcolor}
+\usepackage{minted}
+\definecolor{LightGray}{gray}{0.9}
+\newminted[jupyter]{python}{
+    frame=lines, framesep=2mm, baselinestretch=1.2, bgcolor=LightGray, fontsize=\footnotesize
+    % linenos
+}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{pdfpages}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\title{MAT 167 Final Project \\ {\large Handwritten Digit Recognition via PCA}}
+\author{Candice Chan (removed) \\
+{\large Priyanshi Singh (removed)}}
+\date{June 8, 2025}
+
+\begin{document}
+
+\maketitle
+
+%---------------------------------------------------------------------------------------------------------------
+
+\section{Introduction}
+Recognizing handwritten digits is a core challenge in computer vision that impacts everyday technologies, from postal mail sorting to mobile check deposits. However, traditional machine learning approaches face significant challenges when processing high-dimensional image data efficiently.
+
+This project explores how Principal Component Analysis (PCA) can address these challenges by reducing data complexity while preserving essential information. Specifically, we investigate whether combining PCA with K-means clustering can achieve comparable or superior classification accuracy compared to standard approaches.
+
+The analysis combines two key mathematical concepts: PCA to extract the most informative features from high-dimensional image data, and K-means clustering to classify digits into 10 distinct groups corresponding to digits 0 through 9. By applying PCA preprocessing to the USPS handwritten digit database, we evaluate how different numbers of principal components affect classification accuracy and determine the ideal balance between computational efficiency and clustering performance.
+
+%---------------------------------------------------------------------------------------------------------------
+
+\section{Data Sets}
+This project uses the USPS handwritten digit database for the main analysis, with the MNIST dataset reserved for extended exploration in the challenging work section.
+
+The primary analysis focuses on the USPS handwritten digit database, contained in the file \texttt{usps\_images.mat}. This database contains grayscale images of handwritten digits 0 through 9 stored in two main arrays: \texttt{digits\_images} and \texttt{digits\_labels}.
+\subsection{Representation and Dimensions}
+The \texttt{digits\_images} array is a $256 \times 9298$ matrix where each column represents a single handwritten digit image. Each image consists of $16 \times 16$ grayscale pixels flattened into a 256-dimensional vector. The pixel intensities are normalized to the range $[-1, 1]$.
+The \texttt{digits\_labels} array is a $10 \times 9298$ matrix containing ground truth information for each digit image using one-hot encoding. If image $j$ truly represents digit $i$, then \texttt{digits\_labels}[$i, j$] is $+1$, and all other entries in that column are $-1$.
+The dataset contains 9,298 total images across all digit classes (0-9).
+\subsection{Visualization of Sample Images}
+Figure 1 displays the first 16 images from the \texttt{digits\_images} array, reshaped into their original $16 \times 16$ format for visualization. These images show the variability in handwriting styles present in the dataset.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{first_16_images.png}
+  \caption*{Figure 1: First 16 handwritten digit images from the USPS dataset.}
+\end{figure}
+Figure 2 shows the average digit for each class (0-9), computed by averaging all images corresponding to each digit. These mean images represent the ``typical'' appearance of each digit in the dataset and serve as initial cluster centers for the K-means algorithm.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{mean_digit_images.png}
+  \caption*{Figure 2: Mean digit images for classes 0-9.}
+\end{figure}
+\subsection{Data Preprocessing and Mean Images}
+As part of our PCA preprocessing, we computed the overall mean across all digit images and centered the data by subtracting this mean from each image. Figure 3 below shows the overall mean image, which represents the average pixel intensity across all 9,298 handwritten digits.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{mean_all_digits.png}
+  \caption*{Figure 3: Overall mean image computed from all digits in the dataset.}
+\end{figure}
+After centering the data, we also computed the mean digit for each class (0-9) using the centered images. Figure 4 displays these centered mean digits, which show how each digit class appears relative to the overall average.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{mean_centered_digits.png}
+  \caption*{Figure 4: Mean digit images for classes 0-9 after centering the data.}
+\end{figure}
+The centering process is essential for PCA as it ensures that the principal components capture the directions of maximum variance rather than being influenced by the overall brightness of the images.
+\subsection{MNIST Dataset}
+The MNIST database, first introduced in 1998 by LeCun et al., contains 60,000 training images and 10,000 test images of handwritten digits 0 through 9 \cite{cohen2017emnist}. Each image consists of $28 \times 28$ grayscale pixels, larger than the USPS $16 \times 16$ format. The MNIST dataset was derived from the NIST Special Database 19, which contains digits, uppercase and lowercase handwritten letters.
+
+This dataset will be used in the challenging work section to evaluate how effectively our PCA-enhanced K-means approach performs across different image resolutions and dataset sizes.
+
+%---------------------------------------------------------------------------------------------------------------
+
+\section{Methods}
+\subsection{PCA as a Dimension Reduction Technique}
+We apply Principal Component Analysis (PCA) to reduce the dimensionality of our USPS digit images while preserving the most important information for classification. Each $16 \times 16$ digit image contains 256 pixels, creating a high-dimensional space that can be computationally expensive and noisy for clustering algorithms.
+\subsubsection{Mathematical Framework}
+Our data matrix $\mathbf{X} = [\mathbf{x}_1, \mathbf{x}_2, \ldots, \mathbf{x}_n] \in \mathbb{R}^{d \times n}$ contains flattened digit images as columns, where $d = 256$ pixels and $n = 9{,}298$ images. PCA identifies the directions of maximum variance in this data by first centering each image:
+\[
+\bar{\mathbf{x}} = \frac{1}{n} \sum_{i=1}^n \mathbf{x}_i = \frac{1}{n} \mathbf{X} \mathbf{1}
+\]
+The centered data matrix becomes:
+\[
+\tilde{\mathbf{X}} = \mathbf{X} - \bar{\mathbf{x}} \mathbf{1}^\top
+\]
+PCA seeks the unit vector $z$ that maximizes the variance of the projected data:
+\[
+\max_{\| z \|_2 = 1} \ \frac{1}{n} z^\top \tilde{\mathbf{X}} \tilde{\mathbf{X}}^\top z
+\]
+This problem is equivalent to computing the eigenvalue decomposition of the sample covariance matrix:
+\[
+\mathbf{S} = \frac{1}{n} \tilde{\mathbf{X}} \tilde{\mathbf{X}}^\top = \Phi \Lambda \Phi^\top
+\]
+Here, $\Lambda = \text{diag}(\lambda_1, \lambda_2, \ldots, \lambda_d)$ contains the eigenvalues in descending order, and $\Phi = [\phi_1, \phi_2, \ldots, \phi_d]$ contains the corresponding orthonormal eigenvectors (principal components).
+
+\subsubsection{Efficient SVD Implementation}
+Rather than computing the expensive $256 \times 256$ covariance matrix, our \texttt{usps\_pca\_clustering} function uses Singular Value Decomposition (SVD) for efficiency. We decompose the centered data as:
+\[
+\tilde{\mathbf{X}} = \hat{\mathbf{U}} \hat{\Sigma} \hat{\mathbf{V}}^\top
+\]
+The connection between SVD and PCA gives us principal components $\Phi = \hat{\mathbf{U}}$ and eigenvalues $\lambda_i = \frac{\sigma_i^2}{n}$. This approach extracts the first $k$ principal components as $\Phi_k = [\phi_1, \ldots, \phi_k] \in \mathbb{R}^{d \times k}$ without forming the full covariance matrix.
+
+\subsubsection{Image Reconstruction Using Low-Rank Approximation}
+PCA allows us to approximate any digit image using only the $k$ most important principal components. The reconstruction formula is:
+\[
+\mathbf{x}_j \approx \bar{\mathbf{x}} + \Phi_k \Phi_k^\top (\mathbf{x}_j - \bar{\mathbf{x}})
+\]
+This process works in three steps. First, we project the centered image onto the $k$-dimensional PCA subspace using $\Phi_k^\top (\mathbf{x}_j - \bar{\mathbf{x}})$. Next, we reconstruct back to the original 256-dimensional space with $\Phi_k \left[\Phi_k^\top (\mathbf{x}_j - \bar{\mathbf{x}})\right]$. Finally, we add back the mean to get the approximated image by $\bar{\mathbf{x}} + \Phi_k \Phi_k^\top (\mathbf{x}_j - \bar{\mathbf{x}})$. The key insight is that we can represent each 256-dimensional image using only $k$ coefficients:
+\[
+\text{digits\_reduced} = \Phi_k^\top \tilde{\mathbf{X}}
+\]
+This compressed representation captures the $k$ directions of largest variance while discarding noise and less important features.
+
+\subsubsection{Our PCA Implementation}
+The \texttt{usps\_pca\_clustering} function combines PCA dimensionality reduction with K-means clustering. Here is how each step works mathematically:
+\paragraph{Data Centering:}
+We compute the overall mean and subtract it from each image: $$\text{mean\_all\_digits} = \frac{1}{n} \sum_{i=1}^n x_i$$ $$\tilde{X} = X - \text{mean\_all\_digits} \cdot \mathbf{1}^T$$
+\paragraph{SVD and Component Selection:} Since \texttt{svds} returns components in ascending order of importance, we reverse them: $$U_k = U_k[:,::-1]$$
+\paragraph{Dimensionality Reduction:} We project all images onto the $k$-dimensional PCA space: $$\text{digits\_svd} = U_k^T\tilde{X}$$
+\paragraph{Cluster Initialization:} For each digit class $j$, we compute the mean in the reduced space: $$\mu_j^{(0)} = \frac{1}{|S_j|} \sum_{x_i \in S_j} U_k^T\tilde{x}_i$$
+\paragraph{Clustering:} We run K-means using the standard distance metric $\|x_{i,\text{pca}} - \mu_{j,\text{pca}}\|_2^2$ in the reduced space.
+
+\subsection{K-means Clustering Algorithm}
+\subsubsection{Problem Formulation}
+K-means partitions our digit images into $k = 10$ clusters, with each cluster ideally corresponding to one digit class (0-9). The algorithm minimizes the total within-cluster variance: $$J(C) = \sum_{j=1}^k \sum_{\mathbf{x}_i \in C_j} \|\mathbf{x}_i - \boldsymbol{\mu}_j\|_2^2$$ where each cluster $C_j$ has centroid $$\boldsymbol{\mu}_j = \frac{1}{|C_j|} \sum_{\mathbf{x}_i \in C_j} \mathbf{x}_i$$ This objective function ensures that images within each cluster are similar while maximizing separation between clusters.
+\subsubsection{Algorithm Implementation}
+Our implementation follows the standard iterative approach:
+\paragraph{Initialization:} We start with centroids based on true digit classes: $$\mu_j^{(0)} = \frac{1}{|S_j|} \sum_{x_i \in S_j} x_i$$ where $S_j$ contains all training images of digit class $j$.
+\paragraph{Assignment Step:} Each image is assigned to its nearest centroid: $$c^{(t)}(x_i) = \arg\min_{j=1,\ldots,k} \|x_i - \mu_j^{(t-1)}\|_2^2$$ This creates new cluster assignments $C_1^{(t)}, C_2^{(t)}, \ldots, C_k^{(t)}$.
+\paragraph{Update Step:} We recompute each centroid as the mean of its assigned points: $$\mu_j^{(t)} = \frac{1}{|C_j^{(t)}|} \sum_{x_i \in C_j^{(t)}} x_i$$
+\paragraph{Convergence:} We repeat until cluster assignments stabilize: $C^{(t)} = C^{(t-1)}$.
+
+\subsubsection{Algorithm Properties}
+The K-means algorithm has important theoretical guarantees. The objective function $J(C^{(t)}) \leq J(C^{(t-1)})$ decreases at each iteration, ensuring convergence to a local minimum. Each step is optimal: the assignment step minimizes $J(C)$ with respect to cluster memberships, while the update step minimizes $J(C)$ with respect to centroid locations.
+
+\subsubsection{PCA-Enhanced Clustering}
+Instead of clustering in the original 256-dimensional pixel space, we perform K-means on the PCA-transformed data. After computing principal components $\Phi_k$, we work with: $$X_{\text{pca}} = \Phi_k^T \tilde{X} \in \mathbb{R}^{k \times n}$$ Distance calculations become $\|x_{i,\text{pca}} - \mu_{j,\text{pca}}\|_2^2 = \|\Phi_k^T\tilde{x}_i - \Phi_k^T\tilde{\mu}_j\|_2^2$ in the reduced space.
+
+This approach offers three main advantages: computational efficiency through smaller distance calculations, noise reduction by filtering out less important variations, and improved clustering by focusing on the most discriminative image features rather than raw pixel values.
+
+The resulting cluster assignments tell us how well unsupervised K-means can recover the true digit labels using only the geometric structure of the data.
+
+%---------------------------------------------------------------------------------------------------------------
+
+\section{Results}
+\subsection{Baseline K-Means Performance Analysis}
+We first applied the K-means algorithm directly to the original 256-dimensional pixel space of the digit images. Using the pre-computed mean digit images as initial centroids, the baseline K-means achieved an overall classification accuracy of 75.95\%.
+\subsubsection{Baseline Confusion Matrix Analysis}
+The confusion matrix below reveals several important patterns across digit classes.
+\[
+\begin{bmatrix}
+1043 & 2 & 2 & 15 & 13 & 13 & 447 & 1 & 14 & 3\\
+0 & 1260 & 0 & 0 & 3 & 1 & 1 & 0 & 4 & 0\\
+13 & 20 & 674 & 55 & 77 & 1 & 14 & 14 & 43 & 18\\
+6 & 5 & 7 & 689 & 5 & 29 & 2 & 2 & 43 & 36\\
+0 & 49 & 11 & 0 & 581 & 0 & 11 & 3 & 16 & 181\\
+19 & 8 & 6 & 46 & 34 & 516 & 30 & 3 & 34 & 20\\
+53 & 45 & 39 & 0 & 17 & 12 & 663 & 0 & 3 & 2\\
+0 & 7 &2 & 0 & 12 & 1 & 0 & 562 & 9 & 199\\
+11 & 27 & 4 & 21 & 19 & 20 & 6 & 3 & 449 & 98\\
+0 & 14 & 0 & 2 & 126 & 0 & 0 & 58 & 46 & 575
+\end{bmatrix}
+\]
+Digit 1 achieved exceptional accuracy at 99.3\% due to its unique linear structure that distinguishes it clearly from other digits. The largest classification error occurred between digits 0 and 6, with 447 instances of digit 0 being misclassified as digit 6. This pattern reflects the geometric similarity between these digits, both having a circular or oval structure.
+
+Digit 4 frequently confused with digit 9, producing 181 misclassifications. Similarly, digit 7 was often misclassified as digit 9 with 199 errors. These patterns indicate that certain digit pairs share geometric features that create ambiguity in the pixel space. Digits 2, 3, 5, and 8 showed moderate performance with errors distributed across multiple classes, suggesting their geometric features overlap with several other digit classes.
+\subsection{PCA-Enhanced K-Means Clustering Performance Analysis}
+\subsubsection{Choosing an Optimal Value of $k$}
+Figure 5 below illustrates the relationship between classification accuracy and the number of principal components.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{overall_class_rate_vs_k.png}
+  \caption*{Figure 5: Plot of the classification errors for each k value between 1 and 30.}
+\end{figure}
+The curve exhibits two distinct phases: rapid improvement from $k = 1$ to $k = 11$, followed by marginal gains from $k = 11$ to $k = 30$. This behavior indicates that the first 11 components capture the most important discriminative features.
+
+We selected $k = 11$ as the optimal dimensionality, achieving 95.7\% dimensional reduction (256 to 11 features) while maintaining strong classification performance. This allows us to strike an effective balance between computational efficiency and accuracy. This is based on using the "Elbow" as shown in Figure 5. 
+
+The classification rate curve improves rapidly until k = 11, after which the rate improvement plateaus and becomes minimal. The k values beyond k = 11 improve their classification rate slightly, but not enough to justify the computational cost as an addition increment in k represents an additional feature being added into the model. Overall, we chose to move forward with k = 11 to maintain a strong model performance by picking a k-value that would balance both computational efficiency and accuracy. 
+
+\subsubsection{PCA-Enhanced Confusion Matrix Analysis}
+The PCA-enhanced K-means with $k = 11$ achieved an overall classification rate of 74.08\%. The confusion matrix below preserves the primary error patterns observed in the baseline approach.
+\[
+\begin{bmatrix}
+1010 & 3 & 4 & 24 & 13 & 6 & 473 & 1 & 14 & 5\\
+0 & 1260 & 0 & 0 & 3 & 1 & 1 & 0 & 4 & 0\\
+12 & 18 & 664 & 61 & 87 & 1 & 16 & 16 & 39 & 15\\
+7 & 6 & 7 & 658 & 7 & 33 & 4 & 5 & 52 & 45\\
+0 & 45 & 13 & 0 & 592 & 0 & 10 & 2 & 17 & 173\\
+27 & 4 & 6 & 95 & 29 & 477 & 21 & 1 & 35 & 21\\
+46 & 55 & 43 & 0 & 16 & 12 & 657 & 0 & 3 & 2\\
+0 & 6 & 2 & 0 & 12 & 1 & 0 & 570 & 10 & 191\\
+12 & 31 & 5 & 25 & 18 & 16 & 6 & 3 & 473 & 119\\
+0 & 13 & 0 & 2 & 115 & 0 & 0 & 64 & 71 & 556
+\end{bmatrix}
+\]
+The 0-6 confusion remains prominent with 473 misclassifications, while the 4-9 and 7-9 confusions persists with 173 and 191 errors respectively.
+
+The fact that both approaches struggle with the same digit pairs indicates that PCA successfully preserves the important structural information that defines each digit class. Despite reducing the feature space from 256 to 11 dimensions, we observe only a small decrease in accuracy from 75.95\% to 74.08\%. This 1.87\% reduction demonstrates that the 11 principal components contain nearly all the information needed for effective digit classification. Since the same confusion patterns appear in both the original pixel space and the reduced PCA space, we can conclude that the classification errors stem from genuine geometric similarities between certain digits rather than from information lost during dimensionality reduction.
+\subsubsection{Per-Digit Accuracy Comparison}
+Table 1 below compares per-digit classification accuracies between the baseline and PCA-enhanced models.
+\begin{table}[H]
+\centering
+\caption{Per-digit classification accuracy comparison.}
+\begin{tabular}{c|c|c}
+\textbf{Digit} & \textbf{Baseline K-Means Accuracy (\%)} & \textbf{PCA K-Means Accuracy (\%)} \\
+\hline
+0 & 67.2 & 65.0 \\
+1 & 99.3 & 99.3 \\
+2 & 72.5 & 71.5 \\
+3 & 83.6 & 79.9 \\
+4 & 68.2 & 69.5 \\
+5 & 72.1 & 66.6 \\
+6 & 79.5 & 78.8 \\
+7 & 71.0 & 72.0 \\
+8 & 70.5 & 66.8 \\
+9 & 70.0 & 67.7 \\
+\end{tabular}
+\end{table}
+Digit 1 performed identically in both methods with near-perfect 99.3\% accuracy, demonstrating that its simple vertical line structure makes it easy to classify regardless of the feature representation. Interestingly, digits 4 and 7 showed slight improvements with PCA, increasing from 68.2\% to 69.5\% and from 71.0\% to 72.0\% respectively. This improvement indicates that the original 256-dimensional space contained noise that interfered with classifying these digits, and PCA successfully filtered out this unnecessary information.
+
+In contrast, digit 5 experienced the most significant performance loss, dropping 5.5\% from 72.1\% to 66.6\% accuracy. This decrease suggests that some features important for recognizing digit 5 were captured in the higher-numbered principal components that we discarded when choosing $k = 11$. The remaining digits experienced smaller accuracy losses, which demonstrates that PCA generally preserves the essential characteristics needed for digit recognition.
+
+\subsection{Challenging Work}
+\subsubsection{Random vs. Pre-Calculated Initialization Comparisons}
+
+To investigate how different initialization and parameters affect the K-means algorithm, we compared different initialization strategies and their respective performances. 
+
+We started by comparing the pre-calculated and strategic initialization process mentioned in the K-means clustering algorithm section above, against a random initialization process to see how this would impact K-means performance. 
+
+To do this, we simply changed the initialization process to random rather than accounting for the pre-calculated centers of the different clusters during the initialization process of the K-means algorithm. After running K-means on this random initialization, we surprisingly found that the random initialization classification accuracy was 75.97\% while the pre-calculated, smarter initialization classification accuracy was 74.08\%. Surprisingly, random initialization outperformed the pre-calculated approach. This may be caused by the K-means algorithm getting stuck at a local optima with the calculated initialization model, or that the PCA space somehow creates complex interactions that reversed the expected performance patterns. 
+
+\subsubsection{2D Structure Visualization}
+The image below provides a visualization of data points of the first two principal components, providing key insights. 
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{current_vs_random_kmeans.png}
+  \caption*{Figure 4: Comparison of clustering results projected into the first two principal components. Left: Pre-calculated Initialization Results with 74.08\% accuracy. Right: Random Initialization Results with 75.97\% accuracy.}
+\end{figure}
+
+First, there is extensive overlap between the two principal components, showing lots of overlap between the different digit classes. This shows why it is necessary to have 11 dimensions to classify the digits more accurately than just 2 dimensions. 
+
+Both initialization methods produce similar clustering patterns in this 2D view, suggesting that the performance accuracy differences lie within the relationships of the data in some higher dimensions and not in this reduced simplified view.
+
+Lastly, we can see that the overlapping structure between the clusters suggests that PCA cannot capture the discriminative and clear boundaries needed to classify the handwritten digits effectively, definitely not with two dimensions. 
+
+\subsubsection{t-SNE Visualization}
+The image below is a t-SNE visualization plot showing the non-linear structure of the data set. 
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{tsne_visual.png}
+  \caption*{Figure 5: t-SNE Visualization representing the 10 distinct clusters, presenting the nonlinear structure within the dataset and in handwritten digit recognition.}
+\end{figure}
+
+In comparison to our PCA plot, we can see that the clusters are more easily distinguishable with clear boundaries between most of the digit classes. 
+
+Furthermore, we can see that there is a dramatic improvement in cluster separation, further reinforcing the idea that the digits lie in nonlinear dimensional spaces that cannot be captured by PCA's transformations. 
+
+We also see in this plot that some of the digits have clearer compact clusters, while other digit clusters have more spread and variation. This reflects the differences in handwriting styles, stylistic variations, and similar structures among the digits. 
+
+However, it is important to note that while the t-SNE method provides better visualization of the dataset along with a better understanding of the underlying structure, the process is significantly more computationally expensive and thus would not be efficient for larger datasets. 
+
+\subsubsection{Machine Learning Implications}
+Our project and analysis highlights a common problem and trade-off between the accuracy of models versus their computational efficiency. 
+
+Our analysis compares two main approaches: PCA and t-SNE, each with their own benefits and disadvantages. The advantages of using PCA are that it is easily interpretable, is computationally efficient, and is scalable. However, PCA is limited by its inability to capture nonlinear relationships that may be crucial for complex data. On the other hand, t-SNE can reveal structure and visualizations better than PCA, but is computationally expensive making it inefficient for larger datasets. 
+
+\subsubsection{MNIST Dataset Extension}
+
+On a larger handwritten-digit dataset such as the MNIST dataset, implementing PCA processing is recommended to maintain both computational efficiency and robustness. 
+
+Because MNIST has larger images ($28 \times 28$ vs. $16 \times 16$), there are more dimensions to process, which would require even more principal components to accurately capture the data. Furthermore, there would be more data to process with more features to process, increasing both the computational time and the memory requirements needed. 
+
+However, by using PCA, we can perform dimensionality reduction faster, rather than using the entire dataset. Furthermore, because this dataset is larger, there are more features which may lead to more robust principal components. 
+
+Overall, for larger datasets such as the MNIST dataset, PCA provides a good balance between computational efficiency and accuracy. 
+
+%---------------------------------------------------------------------------------------------------------------
+
+\section{Conclusion}
+This project successfully demonstrated that PCA serves as an effective dimension reduction technique for handwritten digit recognition. By reducing dimensionality from 256 to 11 features, we achieved nearly identical classification performance with only a 1.87\% accuracy decrease from 75.95\% to 74.08\%.
+
+The key insight is that the first 11 principal components capture the essential discriminative information needed for digit classification. The fact that identical confusion patterns appear in both the baseline and PCA-enhanced approaches confirms that classification errors stem from genuine geometric similarities between certain digit pairs (0-6, 4-9, 7-9) rather than information loss during dimensionality reduction.
+
+Our analysis revealed that PCA successfully balances computational efficiency with classification accuracy. While more sophisticated techniques like t-SNE provide better visualization, PCA's linear approach proves sufficient for this application while maintaining scalability to larger datasets. The significant reduction in computational complexity makes PCA particularly valuable for digit recognition systems.
+
+These results show that PCA can be effectively applied to other high-dimensional pattern recognition problems, proving that we can drastically reduce data complexity while keeping the important structural information intact.
+
+% \section*{Appendix}
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}
